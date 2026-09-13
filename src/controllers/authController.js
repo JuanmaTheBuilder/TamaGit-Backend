@@ -1,16 +1,18 @@
 const prisma = require('../lib/prisma');
 const jwt = require('jsonwebtoken');
-const { githubAuthorizeUrl, randomState } = require('../lib/github');
+const { githubAuthorizeUrl, randomState, resolveCallbackUrl } = require('../lib/github');
 
 const login = (req, res) => {
   const state = randomState();
-  res.redirect(githubAuthorizeUrl(state));
+  const redirectUri = resolveCallbackUrl(req);
+  res.redirect(githubAuthorizeUrl(state, redirectUri));
 };
 
 const tokenResponse = async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=0');
   try {
     const code = req.query.code;
+    const redirectUri = resolveCallbackUrl(req);
 
     if (req.query.error || !code) {
       return res.status(400).json({ error: 'OAuth cancelado o inválido' });
@@ -23,7 +25,7 @@ const tokenResponse = async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: process.env.GITHUB_CALLBACK_URL,
+        redirect_uri: redirectUri,
       }),
     });
     const tokenData = await tokenRes.json();
