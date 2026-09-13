@@ -18,17 +18,36 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  pets Pet[]
+  projects Project[]
+}
+
+model Project {
+  id           Int       @id @default(autoincrement())
+  githubRepoId Int       @unique
+  name         String
+  fullName     String?
+  mainLanguage String?
+  tools        String[]  @default([])
+  ownerId      Int
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  owner User  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  pet   Pet?
 }
 
 model Pet {
   id        Int      @id @default(autoincrement())
   name      String
   species   String   @default("egg")
+  health    Int      @default(100)
+  hunger    Int      @default(100)
   xp        Int      @default(0)
   level     Int      @default(1)
-  ownerId   Int
+  imageUrl  String?
+  projectId Int      @unique
   createdAt DateTime @default(now())
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 }

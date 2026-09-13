@@ -7,6 +7,8 @@ app.use(express.json());
 app.use('/', require('./routes/index.routes'));
 app.use('/auth', require('./routes/auth.routes'));
 app.use('/github', require('./routes/github.routes'));
+app.use('/projects', require('./routes/projects.routes'));
+app.use('/pets', require('./routes/pets.routes'));
 app.use('/users', require('./routes/users.routes'));
 
 app.use((err, req, res, next) => {
