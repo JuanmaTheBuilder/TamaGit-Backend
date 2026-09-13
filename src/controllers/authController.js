@@ -3,7 +3,10 @@ const jwt = require('jsonwebtoken');
 const { githubAuthorizeUrl, randomState } = require('../lib/github');
 
 const login = (req, res) => {
-  const state = randomState();
+  const redirectUri = typeof req.query.redirect_uri === 'string' ? req.query.redirect_uri.trim() : '';
+  const state = redirectUri
+    ? jwt.sign({ redirect: redirectUri }, process.env.JWT_SECRET, { expiresIn: '10m' })
+    : randomState();
   res.redirect(githubAuthorizeUrl(state));
 };
 
@@ -11,6 +14,17 @@ const tokenResponse = async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=0');
   try {
     const code = req.query.code;
+
+    let redirectUri = '';
+    const state = req.query.state;
+    if (typeof state === 'string' && state.includes('.')) {
+      try {
+        const decoded = jwt.verify(state, process.env.JWT_SECRET);
+        if (decoded && typeof decoded.redirect === 'string') redirectUri = decoded.redirect;
+      } catch {
+        redirectUri = '';
+      }
+    }
 
     if (req.query.error || !code) {
       return res.status(400).json({ error: 'OAuth cancelado o inválido' });
@@ -68,7 +82,7 @@ const tokenResponse = async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES || '30d',
     });
 
-    const deepLink = process.env.TAMAGIT_DEEP_LINK;
+    const deepLink = redirectUri || process.env.TAMAGIT_DEEP_LINK;
     if (deepLink && req.query.json !== '1') {
       const query = new URLSearchParams({
         token,
