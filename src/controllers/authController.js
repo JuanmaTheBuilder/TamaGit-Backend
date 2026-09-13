@@ -3,21 +3,34 @@ const jwt = require('jsonwebtoken');
 const { githubAuthorizeUrl, randomState, resolveCallbackUrl } = require('../lib/github');
 
 const login = (req, res) => {
-  const state = randomState();
-  const redirectUri = resolveCallbackUrl(req);
-  res.redirect(githubAuthorizeUrl(state, redirectUri));
+  const redirectUri = typeof req.query.redirect_uri === 'string' ? req.query.redirect_uri.trim() : '';
+  const state = redirectUri
+    ? jwt.sign({ redirect: redirectUri }, process.env.JWT_SECRET, { expiresIn: '10m' })
+    : randomState();
+  res.redirect(githubAuthorizeUrl(state, resolveCallbackUrl(req)));
 };
 
 const tokenResponse = async (req, res) => {
   res.setHeader('Cache-Control', 'private, max-age=0');
   try {
     const code = req.query.code;
-    const redirectUri = resolveCallbackUrl(req);
+
+    let deepLink = '';
+    const state = req.query.state;
+    if (typeof state === 'string' && state.includes('.')) {
+      try {
+        const decoded = jwt.verify(state, process.env.JWT_SECRET);
+        if (decoded && typeof decoded.redirect === 'string') deepLink = decoded.redirect;
+      } catch {
+        deepLink = '';
+      }
+    }
 
     if (req.query.error || !code) {
       return res.status(400).json({ error: 'OAuth cancelado o inválido' });
     }
 
+    const callbackUrl = resolveCallbackUrl(req);
     const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -25,7 +38,7 @@ const tokenResponse = async (req, res) => {
         client_id: process.env.GITHUB_CLIENT_ID,
         client_secret: process.env.GITHUB_CLIENT_SECRET,
         code,
-        redirect_uri: redirectUri,
+        redirect_uri: callbackUrl,
       }),
     });
     const tokenData = await tokenRes.json();
@@ -70,14 +83,14 @@ const tokenResponse = async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES || '30d',
     });
 
-    const deepLink = process.env.TAMAGIT_DEEP_LINK;
-    if (deepLink && req.query.json !== '1') {
+    const targetLink = deepLink || process.env.TAMAGIT_DEEP_LINK;
+    if (targetLink && req.query.json !== '1') {
       const query = new URLSearchParams({
         token,
         username: user.githubUsername || '',
         avatar: user.avatarUrl || '',
       });
-      return res.redirect(`${deepLink}?${query.toString()}`);
+      return res.redirect(`${targetLink}?${query.toString()}`);
     }
 
     return res.json({ token, user: safeUser(user) });
@@ -89,10 +102,12 @@ const tokenResponse = async (req, res) => {
 function safeUser(user) {
   return {
     id: user.id,
-    username: user.githubUsername,
-    name: user.name,
     email: user.email,
+    name: user.name,
+    githubId: user.githubId,
+    githubUsername: user.githubUsername,
     avatarUrl: user.avatarUrl,
+    createdAt: user.createdAt,
   };
 }
 
