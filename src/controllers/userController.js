@@ -55,7 +55,7 @@ const remove = async (req, res) => {
 
 const setBan = async (req, res) => {
   const targetId = Number(req.params.id);
-  const { isBanned } = req.body;
+  const { isBanned, reason } = req.body;
 
   if (typeof isBanned !== 'boolean') {
     return res.status(400).json({ error: 'Falta el campo isBanned (boolean)' });
@@ -70,9 +70,59 @@ const setBan = async (req, res) => {
       where: { id: targetId },
       data: { isBanned },
     });
+
+    if (isBanned && reason && reason.trim()) {
+      const { createNotification } = require('./notificationController');
+      await createNotification(targetId, 'banned', `Tu cuenta ha sido suspendida. Motivo: ${reason.trim()}`);
+    }
+
     res.json(safeUser(user));
   } catch (err) {
     res.status(500).json({ error: 'No se pudo actualizar el estado del usuario', details: err.message });
+  }
+};
+
+const listUserPets = async (req, res) => {
+  const targetId = Number(req.params.id);
+
+  if (req.user.id !== targetId && !req.user.isAdmin) {
+    return res.status(403).json({ error: 'No tienes permiso' });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { id: true, name: true, githubUsername: true, avatarUrl: true, isAdmin: true },
+    });
+
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    const projects = await prisma.project.findMany({
+      where: { ownerId: targetId },
+      include: {
+        pet: {
+          include: {
+            items: { include: { item: true } },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const pets = projects
+      .filter((p) => p.pet)
+      .map((p) => ({
+        pet: {
+          ...p.pet,
+          projectName: p.name,
+          projectFullName: p.fullName,
+          itemCount: p.pet.items.length,
+        },
+      }));
+
+    res.json({ user, pets });
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudieron cargar las mascotas del usuario', details: err.message });
   }
 };
 
@@ -90,4 +140,4 @@ function safeUser(user) {
   };
 }
 
-module.exports = { list, me, create, update, remove, setBan };
+module.exports = { list, me, create, update, remove, setBan, listUserPets };
