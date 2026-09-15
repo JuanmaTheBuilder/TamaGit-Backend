@@ -17,6 +17,10 @@ const verifyToken = async (req, res, next) => {
       return res.status(401).json({ error: 'No autorizado: usuario inexistente' });
     }
 
+    if (user.isBanned) {
+      return res.status(403).json({ error: 'Tu cuenta está suspendida' });
+    }
+
     req.user = user;
     next();
   } catch (err) {
@@ -24,4 +28,11 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-module.exports = { verifyToken };
+const requireAdmin = (req, res, next) => {
+  if (!req.user || !req.user.isAdmin) {
+    return res.status(403).json({ error: 'Acceso restringido: se requieren permisos de administrador' });
+  }
+  next();
+};
+
+module.exports = { verifyToken, requireAdmin };

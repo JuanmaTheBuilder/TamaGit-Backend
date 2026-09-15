@@ -33,4 +33,28 @@ const updatePet = async (req, res) => {
   }
 };
 
-module.exports = { updatePet };
+const deletePet = async (req, res) => {
+  const petId = Number(req.params.id);
+
+  try {
+    const pet = await prisma.pet.findUnique({
+      where: { id: petId },
+      include: { project: true },
+    });
+
+    if (!pet) {
+      return res.status(404).json({ error: 'Mascota no encontrada' });
+    }
+
+    if (pet.project.ownerId !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'No tienes permiso para eliminar esta mascota' });
+    }
+
+    await prisma.pet.delete({ where: { id: petId } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo eliminar la mascota', details: err.message });
+  }
+};
+
+module.exports = { updatePet, deletePet };

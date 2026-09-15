@@ -7,5 +7,6 @@ const router = Router();
 router.use(verifyToken);
 
 router.patch('/:id', petController.updatePet);
+router.delete('/:id', petController.deletePet);
 
 module.exports = router;

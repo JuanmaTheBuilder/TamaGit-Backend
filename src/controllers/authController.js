@@ -79,6 +79,10 @@ const tokenResponse = async (req, res) => {
       },
     });
 
+    if (user.isBanned) {
+      return res.status(403).json({ error: 'Tu cuenta está suspendida' });
+    }
+
     const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES || '30d',
     });
@@ -107,6 +111,8 @@ function safeUser(user) {
     githubId: user.githubId,
     githubUsername: user.githubUsername,
     avatarUrl: user.avatarUrl,
+    isAdmin: user.isAdmin,
+    isBanned: user.isBanned,
     createdAt: user.createdAt,
   };
 }

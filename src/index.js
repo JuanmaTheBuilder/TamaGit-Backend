@@ -10,6 +10,8 @@ app.use('/github', require('./routes/github.routes'));
 app.use('/projects', require('./routes/projects.routes'));
 app.use('/pets', require('./routes/pets.routes'));
 app.use('/users', require('./routes/users.routes'));
+app.use('/items', require('./routes/items.routes'));
+app.use('/foods', require('./routes/foods.routes'));
 
 app.use((err, req, res, next) => {
   console.error(err);
