@@ -77,7 +77,7 @@ const deletePet = async (req, res) => {
       return res.status(403).json({ error: 'No tienes permiso para eliminar esta mascota' });
     }
 
-    const { reason } = req.body;
+    const reason = req.body?.reason;
     const owner = await prisma.user.findUnique({
       where: { id: pet.project.ownerId },
       select: { id: true },
@@ -100,7 +100,7 @@ const deletePet = async (req, res) => {
 
 const addItem = async (req, res) => {
   const petId = Number(req.params.petId);
-  const { itemId } = req.body;
+  const itemId = req.body?.itemId;
 
   if (!itemId) return res.status(400).json({ error: 'Falta el itemId' });
 
@@ -160,7 +160,7 @@ const removeItem = async (req, res) => {
     });
     if (!petItem) return res.status(404).json({ error: 'Item no encontrado en la mascota' });
 
-    const { reason } = req.body;
+    const reason = req.body?.reason;
 
     const owner = await prisma.user.findUnique({
       where: { id: pet.project.ownerId },
