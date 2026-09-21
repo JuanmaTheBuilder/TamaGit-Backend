@@ -28,18 +28,28 @@ async function chatCompletion({ messages, temperature = 0.7, maxTokens = 300 }) 
     return null;
   }
 
+  const mod = model();
+  const body = {
+    model: mod,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  };
+
+  // Los modelos GPT-OSS razonan por defecto y pueden agotar el presupuesto de
+  // tokens en el "pensamiento" dejando la respuesta final vacía. Bajar el
+  // esfuerzo garantiza que quede texto en content.
+  if (['openai/gpt-oss-20b', 'openai/gpt-oss-120b'].includes(mod)) {
+    body.reasoning_effort = process.env.GROQ_REASONING_EFFORT || 'low';
+  }
+
   const res = await fetch(GROQ_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      model: model(),
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -49,13 +59,15 @@ async function chatCompletion({ messages, temperature = 0.7, maxTokens = 300 }) 
   }
 
   const data = await res.json();
-  return data.choices?.[0]?.message?.content?.trim() ?? null;
+  const msg = data.choices?.[0]?.message;
+  const text = msg?.content || msg?.reasoning || '';
+  return text.trim() || null;
 }
 
 async function petMessage({ commit, score, summary }) {
   return chatCompletion({
     temperature: 0.9,
-    maxTokens: 200,
+    maxTokens: 300,
     messages: [
       {
         role: 'system',
