@@ -4,8 +4,23 @@ function isEnabled() {
   return Boolean(process.env.GROQ_API_KEY);
 }
 
+const RETIRED = [
+  'llama-3.1-8b-instant',
+  'llama-3.3-70b-versatile',
+  'llama-3.2-1b-preview',
+  'llama-3.2-3b-preview',
+  'llama3-70b-8192',
+  'llama3-8b-8192',
+  'gemma2-9b-it',
+  'mixtral-8x7b-32768',
+];
+
 function model() {
-  return process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
+  const configured = (process.env.GROQ_MODEL || '').trim();
+  if (configured && !RETIRED.includes(configured)) {
+    return configured;
+  }
+  return 'openai/gpt-oss-20b';
 }
 
 async function chatCompletion({ messages, temperature = 0.7, maxTokens = 300 }) {
