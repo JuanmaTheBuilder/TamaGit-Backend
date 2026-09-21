@@ -1,10 +1,16 @@
 const prisma = require('../lib/prisma');
-const { loadCommitDetails, scoreCommit, deltaFromScore, applyBranchRule } = require('../lib/commitAnalysis');
-const { withLiveStats, commitChanges } = require('../lib/petStats');
+const {
+  loadCommitDetails,
+  scoreCommit,
+  deltaFromScore,
+  applyBranchRule,
+  tierFromScore,
+} = require('../lib/commitAnalysis');
+const { commitChanges } = require('../lib/petStats');
 const { memberOf } = require('../lib/membership');
 const groq = require('../lib/groq');
 
-const ANALYSES_LIMIT = 25;
+const DISHES_LIMIT = 30;
 
 async function projectAccess(projectId, user) {
   const project = await prisma.project.findUnique({ where: { id: projectId } });
@@ -18,23 +24,18 @@ async function projectAccess(projectId, user) {
   return { project };
 }
 
-async function fetchPerBranch(token, fullName, branches) {
-  const seen = new Set();
-  const commits = [];
-  for (const branch of branches) {
-    try {
-      const chunk = await loadCommitDetails(token, fullName, branch);
-      for (const c of chunk || []) {
-        if (!seen.has(c.sha)) {
-          seen.add(c.sha);
-          commits.push({ commit: c, branch });
-        }
-      }
-    } catch {
-      // rama inaccesible o sin commits; continuar con la siguiente
-    }
+async function branchCommits(token, fullName, branch, since) {
+  try {
+    const chunk = await loadCommitDetails(token, fullName, branch);
+    return (chunk || [])
+      .filter((c) => {
+        const d = c.commit?.author?.date ? new Date(c.commit.author.date) : null;
+        return d && d >= since;
+      })
+      .map((c) => ({ commit: c, branch }));
+  } catch {
+    return [];
   }
-  return commits;
 }
 
 const analyze = async (req, res) => {
@@ -49,60 +50,114 @@ const analyze = async (req, res) => {
     }
 
     const pet = await prisma.pet.findUnique({ where: { projectId: project.id } });
-    const lifeBranch = pet?.lifeBranch || project.defaultBranch || 'main';
-    const branches = [...new Set([lifeBranch, project.defaultBranch].filter(Boolean))];
+    if (!pet) return res.status(400).json({ error: 'Este proyecto no tiene mascota aún' });
 
-    const fetched = await fetchPerBranch(req.user.githubAccessToken, project.fullName, branches);
+    const since = pet.createdAt;
+    const branches = [...new Set([pet.lifeBranch, project.defaultBranch].filter(Boolean))];
+
+    const fetched = [];
+    for (const branch of branches) {
+      const commits = await branchCommits(req.user.githubAccessToken, project.fullName, branch, since);
+      fetched.push(...commits);
+    }
+
+    const seen = new Set();
+    const unique = [];
+    for (const item of fetched) {
+      if (!seen.has(item.commit.sha)) {
+        seen.add(item.commit.sha);
+        unique.push(item);
+      }
+    }
 
     const result = [];
+    let newestNew = null;
+    let petAfter = pet;
     let applied = 0;
 
-    for (const { commit, branch } of fetched) {
-      const analysis = scoreCommit(commit);
+    for (const { commit, branch } of unique) {
       const existing = await prisma.commitAnalysis.findUnique({
         where: { projectId_sha: { projectId: project.id, sha: commit.sha } },
       });
-
-      const payload = {
-        message: commit.commit?.message?.split('\n')[0] || '(sin mensaje)',
-        author: commit.commit?.author?.name || commit.commit?.committer?.name || null,
-        date: commit.commit?.author?.date ? new Date(commit.commit.author.date) : null,
-        commitUrl: commit.html_url || null,
-        branch,
-        score: analysis.score,
-        findings: analysis.findings,
-      };
-
       if (existing) {
-        await prisma.commitAnalysis.update({
-          where: { id: existing.id },
-          data: { ...payload, summary: existing.summary },
-        });
         result.push({ sha: commit.sha, status: 'existe' });
         continue;
       }
 
-      await prisma.commitAnalysis.create({ data: { projectId: project.id, sha: commit.sha, ...payload } });
+      const analysis = scoreCommit(commit);
+      const date = commit.commit?.author?.date ? new Date(commit.commit.author.date) : null;
 
-      if (pet) {
-        const isLife = branch === lifeBranch;
-        const delta = applyBranchRule(deltaFromScore(analysis), isLife);
-        const changes = commitChanges(pet, delta);
-        await prisma.pet.update({ where: { id: pet.id }, data: changes });
-        applied += 1;
+      await prisma.commitAnalysis.create({
+        data: {
+          projectId: project.id,
+          sha: commit.sha,
+          message: commit.commit?.message?.split('\n')[0] || '(sin mensaje)',
+          author: commit.commit?.author?.name || commit.commit?.committer?.name || null,
+          date,
+          commitUrl: commit.html_url || null,
+          branch,
+          score: analysis.score,
+          findings: analysis.findings,
+          summary: null,
+        },
+      });
+
+      const isLifeBranch = branch === pet.lifeBranch;
+      const delta = applyBranchRule(deltaFromScore(analysis), isLifeBranch);
+      petAfter = { ...petAfter, ...commitChanges(petAfter, delta) };
+      applied += 1;
+
+      if (!newestNew || (date && (!newestNew.date || date > newestNew.date))) {
+        newestNew = {
+          sha: commit.sha,
+          branch,
+          score: analysis.score,
+          message: commit.commit?.message?.split('\n')[0] || '(sin mensaje)',
+          date,
+        };
       }
-
-      result.push({ sha: commit.sha, status: 'nuevo', branch });
+      result.push({ sha: commit.sha, status: 'nuevo' });
     }
 
-    const petOut = pet ? withLiveStats(await prisma.pet.findUnique({ where: { id: pet.id } })) : null;
+    if (applied > 0) {
+      await prisma.pet.update({
+        where: { id: pet.id },
+        data: {
+          health: petAfter.health,
+          hunger: petAfter.hunger,
+          happiness: Math.max(0, Math.min(100, petAfter.happiness)),
+        },
+      });
+    }
+
+    // Mensaje IA SOLO del último commit nuevo, cacheado por sha. No toca stats.
+    if (newestNew) {
+      try {
+        const row = await prisma.commitAnalysis.findUnique({
+          where: { projectId_sha: { projectId: project.id, sha: newestNew.sha } },
+        });
+        if (row && !row.summary) {
+          const summary = await groq.petMessage({
+            commit: { message: newestNew.message, branch: newestNew.branch },
+            score: newestNew.score,
+          });
+          if (summary) {
+            await prisma.commitAnalysis.update({ where: { id: row.id }, data: { summary } });
+            newestNew.summary = summary;
+          }
+        } else if (row?.summary) {
+          newestNew.summary = row.summary;
+        }
+      } catch {
+        // sin IA o fallo de red: se deja null
+      }
+    }
 
     res.json({
-      analyzed: result.length,
+      analyzed: unique.length,
+      newCommits: result.filter((r) => r.status === 'nuevo').length,
       applied,
-      lifeBranch,
-      pet: petOut,
-      commits: result,
+      latest: newestNew,
     });
   } catch (err) {
     res.status(500).json({ error: 'No se pudo analizar el proyecto', details: err.message });
@@ -111,7 +166,6 @@ const analyze = async (req, res) => {
 
 const listAnalyses = async (req, res) => {
   const projectId = Number(req.params.projectId);
-
   try {
     const { project, error } = await projectAccess(projectId, req.user);
     if (error) return res.status(error.status).json({ error: error.error });
@@ -119,31 +173,8 @@ const listAnalyses = async (req, res) => {
     const analyses = await prisma.commitAnalysis.findMany({
       where: { projectId: project.id },
       orderBy: { date: 'desc' },
-      take: ANALYSES_LIMIT,
+      take: DISHES_LIMIT,
     });
-
-    const summaries = new Map();
-    for (const a of analyses) {
-      if (!a.summary) {
-        try {
-          const msg = await groq.petMessage({
-            commit: { message: a.message, branch: a.branch, author: a.author },
-            score: a.score,
-            summary: a.findings?.length ? a.findings.join(' · ') : undefined,
-          });
-          if (msg) {
-            const updated = await prisma.commitAnalysis.update({
-              where: { id: a.id },
-              data: { summary: msg },
-            });
-            summaries.set(a.sha, msg);
-            analyses[analyses.indexOf(a)] = updated;
-          }
-        } catch {
-          // sin IA o fallo de red: se devuelve el análisis sin mensaje
-        }
-      }
-    }
 
     res.json(
       analyses.map((a) => ({
@@ -157,6 +188,7 @@ const listAnalyses = async (req, res) => {
         score: a.score,
         findings: a.findings,
         summary: a.summary,
+        fedAt: a.fedAt,
       }))
     );
   } catch (err) {
@@ -164,4 +196,45 @@ const listAnalyses = async (req, res) => {
   }
 };
 
-module.exports = { analyze, listAnalyses, ANALYSES_LIMIT };
+const dishes = async (req, res) => {
+  const projectId = Number(req.params.projectId);
+
+  try {
+    const { project, error } = await projectAccess(projectId, req.user);
+    if (error) return res.status(error.status).json({ error: error.error });
+
+    const rows = await prisma.commitAnalysis.findMany({
+      where: { projectId: project.id },
+      orderBy: { date: 'desc' },
+      take: DISHES_LIMIT,
+    });
+
+    const foods = await prisma.food.findMany();
+    const foodByTier = { small: null, medium: null, large: null };
+    for (const tier of ['small', 'medium', 'large']) {
+      foodByTier[tier] = foods.find((f) => f.size === tier) ?? foods[0] ?? null;
+    }
+
+    res.json(
+      rows.map((a) => {
+        const tier = tierFromScore(a.score);
+        return {
+          commitId: a.id,
+          sha: a.sha,
+          message: a.message,
+          summary: a.summary,
+          date: a.date,
+          branch: a.branch,
+          score: a.score,
+          tier,
+          fed: Boolean(a.fedAt),
+          food: foodByTier[tier],
+        };
+      })
+    );
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudieron cargar los platillos', details: err.message });
+  }
+};
+
+module.exports = { analyze, listAnalyses, dishes, DISHES_LIMIT };

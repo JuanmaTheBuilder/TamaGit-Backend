@@ -1,7 +1,8 @@
 const prisma = require('../lib/prisma');
 const { createNotification } = require('./notificationController');
 const { memberOf, isPetHiddenBy } = require('../lib/membership');
-const { withLiveStats, feedChanges } = require('../lib/petStats');
+const { withLiveStats } = require('../lib/petStats');
+const { tierFromScore, healFromTier } = require('../lib/commitAnalysis');
 
 async function canAccess(pet, user, { allowHidden = false } = {}) {
   if (user.isAdmin) return true;
@@ -73,6 +74,7 @@ const updatePet = async (req, res) => {
 
 const feedPet = async (req, res) => {
   const petId = Number(req.params.id);
+  const commitId = Number(req.body?.commitId);
 
   try {
     const pet = await prisma.pet.findUnique({
@@ -84,13 +86,48 @@ const feedPet = async (req, res) => {
       return res.status(404).json({ error: 'Mascota no encontrada' });
     }
 
-    const changes = feedChanges(pet);
-    const updated = await prisma.pet.update({
-      where: { id: petId },
-      data: changes,
+    if (!commitId) {
+      return res.status(400).json({ error: 'Se requiere el platillo (commitId) con el que alimentar' });
+    }
+
+    const analysis = await prisma.commitAnalysis.findUnique({
+      where: { id: commitId },
     });
 
-    res.json(withLiveStats(updated));
+    if (!analysis || analysis.projectId !== pet.projectId) {
+      return res.status(404).json({ error: 'Platillo no encontrado para esta mascota' });
+    }
+    if (analysis.fedAt) {
+      return res.status(400).json({ error: 'Este platillo ya fue comido' });
+    }
+
+    const tier = tierFromScore(analysis.score);
+    const heal = healFromTier(tier);
+
+    const current = withLiveStats(pet);
+    const restoredHunger = Math.min(100, current.hunger + heal.hungerRestore);
+    const restoredHealth = Math.min(100, current.health + heal.health);
+
+    const data = {
+      happiness: Math.max(0, Math.min(100, current.happiness)),
+      hunger: restoredHunger,
+      health: restoredHealth,
+    };
+
+    await prisma.$transaction([
+      prisma.pet.update({ where: { id: petId }, data }),
+      prisma.commitAnalysis.update({
+        where: { id: commitId },
+        data: { fedAt: new Date() },
+      }),
+    ]);
+
+    const updated = await prisma.pet.findUnique({ where: { id: petId } });
+
+    res.json({
+      pet: withLiveStats(updated),
+      dish: { commitId, tier, healed: heal },
+    });
   } catch (err) {
     res.status(500).json({ error: 'No se pudo alimentar a la mascota', details: err.message });
   }

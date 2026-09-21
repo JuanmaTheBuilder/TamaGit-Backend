@@ -13,5 +13,6 @@ router.post('/:projectId/pet', projectController.createPet);
 router.get('/:projectId/pet', projectController.getPetByProject);
 router.post('/:projectId/analyze', analysisController.analyze);
 router.get('/:projectId/analyses', analysisController.listAnalyses);
+router.get('/:projectId/dishes', analysisController.dishes);
 
 module.exports = router;

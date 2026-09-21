@@ -70,6 +70,7 @@ model CommitAnalysis {
   score     Int      @default(0)
   findings  Json     @default("[]")
   summary   String?
+  fedAt     DateTime?
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -149,6 +150,7 @@ model Food {
   name          String
   description   String?
   imageUrl      String?
+  size          String   @default("medium")
   hungerRestore Int      @default(30)
   price         Int      @default(0)
   createdAt     DateTime @default(now())

@@ -83,6 +83,24 @@ function deltaFromScore(analysis) {
   return { happiness, hunger, health };
 }
 
+function tierFromScore(score) {
+  if (score < 55) return 'small';
+  if (score < 75) return 'medium';
+  return 'large';
+}
+
+function healFromTier(tier) {
+  switch (tier) {
+    case 'small':
+      return { hungerRestore: 15, health: 1 };
+    case 'large':
+      return { hungerRestore: 45, health: 5 };
+    case 'medium':
+    default:
+      return { hungerRestore: 30, health: 3 };
+  }
+}
+
 function applyBranchRule(delta, isLifeBranch) {
   const dmg = isLifeBranch
     ? { ...delta }
@@ -94,4 +112,4 @@ function applyBranchRule(delta, isLifeBranch) {
   return dmg;
 }
 
-module.exports = { scoreCommit, deltaFromScore, applyBranchRule, loadCommitDetails };
+module.exports = { scoreCommit, deltaFromScore, tierFromScore, healFromTier, applyBranchRule, loadCommitDetails };

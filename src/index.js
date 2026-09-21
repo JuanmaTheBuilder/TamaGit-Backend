@@ -19,6 +19,11 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Error interno del servidor' });
 });
 
+const { seedFoodsIfEmpty } = require('./lib/seedFoods');
+
 app.listen(port, () => {
   console.log(`Servidor corriendo en http://localhost:${port}`);
+  seedFoodsIfEmpty()
+    .then((n) => console.log(`Seed de comidas: ${n} platillos disponibles`))
+    .catch((e) => console.warn('No se pudo sembrar comidas:', e.message));
 });
