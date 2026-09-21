@@ -71,7 +71,6 @@ const analyze = async (req, res) => {
     }
 
     const result = [];
-    let newestNew = null;
     let petAfter = pet;
     let applied = 0;
 
@@ -107,15 +106,6 @@ const analyze = async (req, res) => {
       petAfter = { ...petAfter, ...commitChanges(petAfter, delta) };
       applied += 1;
 
-      if (!newestNew || (date && (!newestNew.date || date > newestNew.date))) {
-        newestNew = {
-          sha: commit.sha,
-          branch,
-          score: analysis.score,
-          message: commit.commit?.message?.split('\n')[0] || '(sin mensaje)',
-          date,
-        };
-      }
       result.push({ sha: commit.sha, status: 'nuevo' });
     }
 
@@ -130,34 +120,47 @@ const analyze = async (req, res) => {
       });
     }
 
-    // Mensaje IA SOLO del último commit nuevo, cacheado por sha. No toca stats.
-    if (newestNew) {
-      try {
-        const row = await prisma.commitAnalysis.findUnique({
-          where: { projectId_sha: { projectId: project.id, sha: newestNew.sha } },
-        });
-        if (row && !row.summary) {
-          const summary = await groq.petMessage({
-            commit: { message: newestNew.message, branch: newestNew.branch },
-            score: newestNew.score,
-          });
-          if (summary) {
-            await prisma.commitAnalysis.update({ where: { id: row.id }, data: { summary } });
-            newestNew.summary = summary;
+    // Análisis cualitativo del último commit (el del bocadillo), cacheado por sha.
+    // Se genera IA solo si aún no existe summary para ese commit. No toca stats.
+    let latest = null;
+    try {
+      const row = await prisma.commitAnalysis.findFirst({
+        where: { projectId: project.id },
+        orderBy: { date: 'desc' },
+      });
+      if (row) {
+        let summary = row.summary;
+        if (!summary) {
+          try {
+            summary = await groq.petMessage({
+              commit: { message: row.message, branch: row.branch },
+              score: row.score,
+            });
+            if (summary) {
+              await prisma.commitAnalysis.update({ where: { id: row.id }, data: { summary } });
+            }
+          } catch {
+            // sin IA o fallo de red: se deja null
           }
-        } else if (row?.summary) {
-          newestNew.summary = row.summary;
         }
-      } catch {
-        // sin IA o fallo de red: se deja null
+        latest = {
+          sha: row.sha,
+          branch: row.branch ?? '',
+          score: row.score,
+          message: row.message,
+          date: row.date,
+          summary,
+        };
       }
+    } catch {
+      // sin análisis aún
     }
 
     res.json({
       analyzed: unique.length,
       newCommits: result.filter((r) => r.status === 'nuevo').length,
       applied,
-      latest: newestNew,
+      latest,
     });
   } catch (err) {
     res.status(500).json({ error: 'No se pudo analizar el proyecto', details: err.message });
