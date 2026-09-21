@@ -121,7 +121,8 @@ const analyze = async (req, res) => {
     }
 
     // Análisis cualitativo del último commit (el del bocadillo), cacheado por sha.
-    // Se genera IA solo si aún no existe summary para ese commit. No toca stats.
+    // Bocadillo IA del último commit: se regenera en cada sync para que la
+    // mascota siempre dé su opinión actual. No toca stats.
     let latest = null;
     try {
       const row = await prisma.commitAnalysis.findFirst({
@@ -130,18 +131,18 @@ const analyze = async (req, res) => {
       });
       if (row) {
         let summary = row.summary;
-        if (!summary) {
-          try {
-            summary = await groq.petMessage({
-              commit: { message: row.message, branch: row.branch },
-              score: row.score,
-            });
-            if (summary) {
-              await prisma.commitAnalysis.update({ where: { id: row.id }, data: { summary } });
-            }
-          } catch {
-            // sin IA o fallo de red: se deja null
+        try {
+          const next = await groq.petMessage({
+            commit: { message: row.message, branch: row.branch },
+            score: row.score,
+            findings: (Array.isArray(row.findings) ? row.findings : []).map((f) => String(f)),
+          });
+          if (next && next !== row.summary) {
+            await prisma.commitAnalysis.update({ where: { id: row.id }, data: { summary: next } });
+            summary = next;
           }
+        } catch {
+          // sin IA o fallo de red: se deja el summary previo si existía
         }
         latest = {
           sha: row.sha,

@@ -64,7 +64,7 @@ async function chatCompletion({ messages, temperature = 0.7, maxTokens = 300 }) 
   return text.trim() || null;
 }
 
-async function petMessage({ commit, score, summary }) {
+async function petMessage({ commit, score, findings }) {
   return chatCompletion({
     temperature: 0.9,
     maxTokens: 300,
@@ -72,11 +72,11 @@ async function petMessage({ commit, score, summary }) {
       {
         role: 'system',
         content:
-          'Eres una mascota virtual de desarrollo (tamagotchi) que comenta brevemente cada commit de su proyecto. Hablas en español, con tono juguetón y muy breve (1-2 frases, máx 50 palabras). Usa emojis con moderación. Adjunta el puntaje de calidad del commit.',
+          'Eres una mascota virtual de desarrollo (tamagotchi) que evalúa CON HONESTIDAD cada commit de su proyecto. Hablas en español, tono juguetón pero CRÍTICO. Debes: (1) decir qué tan bueno estuvo el commit con una frase clara y directa (ej: "¡Buen commit!" o "Este commit dejó que desear"), (2) señalar algo positivo CONCRETO y (3) dar UNA mejora específica y accionable. Máximo 2-3 frases (60 palabras). NO repitas ni parafrasees el mensaje del commit. NO describas lo que se hizo en el commit; VALÓRALO. Usa emojis con moderación. Cierra indicando el puntaje del commit.',
       },
       {
         role: 'user',
-        content: `Commit: "${commit.message}" (rama ${commit.branch || 'unknown'}, autor ${commit.author || 'alguien'}).\nScore de calidad: ${score}/100.\n${summary ? `Resumen técnico:\n${summary}` : ''}`,
+        content: `Commit: "${commit.message}" (rama ${commit.branch || 'unknown'}).\nScore de calidad: ${score}/100.\n${findings && findings.length > 0 ? `Señales de calidad:\n- ${findings.join('\n- ')}` : ''}`,
       },
     ],
   });
