@@ -8,5 +8,6 @@ router.use(verifyToken);
 
 router.get('/repos', githubController.listRepos);
 router.get('/repos/:owner/:repo/commits', githubController.listCommits);
+router.get('/repos/:owner/:repo/branches', githubController.listBranches);
 
 module.exports = router;

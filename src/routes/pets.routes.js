@@ -9,6 +9,9 @@ router.use(verifyToken);
 router.get('/:id', petController.getPet);
 router.patch('/:id', petController.updatePet);
 router.delete('/:id', petController.deletePet);
+router.post('/:id/feed', petController.feedPet);
+router.post('/:id/hide', petController.hidePet);
+router.post('/:id/unhide', petController.unhidePet);
 router.post('/:petId/items', petController.addItem);
 router.delete('/:petId/items/:itemId', petController.removeItem);
 

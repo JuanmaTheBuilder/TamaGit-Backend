@@ -21,39 +21,78 @@ model User {
   updatedAt         DateTime @updatedAt
 
   projects      Project[]
+  memberships   ProjectMember[]
+  hiddenPets    PetHidden[]
   notifications Notification[]
 }
 
 model Project {
-  id           Int       @id @default(autoincrement())
-  githubRepoId Int       @unique
-  name         String
-  fullName     String?
-  mainLanguage String?
-  tools        String[]  @default([])
-  ownerId      Int
-  lastSyncedAt DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id            Int       @id @default(autoincrement())
+  githubRepoId  Int       @unique
+  name          String
+  fullName      String?
+  defaultBranch String?
+  mainLanguage  String?
+  tools         String[]  @default([])
+  ownerId       Int
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  pet   Pet?
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members   ProjectMember[]
+  pet       Pet?
+  analyses  CommitAnalysis[]
+}
+
+model ProjectMember {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  role      String   @default("member")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model CommitAnalysis {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  sha       String
+  message   String
+  author    String?
+  date      DateTime?
+  commitUrl String?
+  branch    String?
+  score     Int      @default(0)
+  findings  Json     @default("[]")
+  summary   String?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sha])
 }
 
 model Pet {
-  id        Int      @id @default(autoincrement())
-  name      String
-  species   String   @default("egg")
-  health    Int      @default(100)
-  hunger    Int      @default(100)
-  xp        Int      @default(0)
-  level     Int      @default(1)
-  imageUrl  String?
-  projectId Int      @unique
-  createdAt DateTime @default(now())
+  id         Int      @id @default(autoincrement())
+  name       String
+  species    String   @default("egg")
+  health     Int      @default(100)
+  hunger     Int      @default(100)
+  happiness  Int      @default(100)
+  lifeBranch String   @default("main")
+  imageUrl   String?
+  projectId  Int      @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  project Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  items   PetItem[]
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  items     PetItem[]
+  hiddenBy  PetHidden[]
 }
 
 model PetItem {
@@ -67,6 +106,18 @@ model PetItem {
   item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([petId, itemId])
+}
+
+model PetHidden {
+  id        Int      @id @default(autoincrement())
+  petId     Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([petId, userId])
 }
 
 model Notification {

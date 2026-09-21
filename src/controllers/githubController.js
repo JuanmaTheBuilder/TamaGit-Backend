@@ -54,4 +54,16 @@ const listCommits = async (req, res) => {
   }
 };
 
-module.exports = { listRepos, listCommits };
+const { listRepoBranches } = require('../lib/githubApi');
+
+const listBranches = async (req, res) => {
+  try {
+    const { owner, repo } = req.params;
+    const branches = await listRepoBranches(req.user.githubAccessToken, `${owner}/${repo}`);
+    res.json(branches);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: 'No se pudieron cargar las ramas', details: err.message });
+  }
+};
+
+module.exports = { listRepos, listCommits, listBranches };

@@ -97,8 +97,16 @@ const listUserPets = async (req, res) => {
 
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
+    const membershipRows = await prisma.projectMember.findMany({
+      where: { userId: targetId },
+      select: { projectId: true },
+    });
+    const memberProjectIds = membershipRows.map((m) => m.projectId);
+
     const projects = await prisma.project.findMany({
-      where: { ownerId: targetId },
+      where: {
+        OR: [{ ownerId: targetId }, { id: { in: memberProjectIds } }],
+      },
       include: {
         pet: {
           include: {

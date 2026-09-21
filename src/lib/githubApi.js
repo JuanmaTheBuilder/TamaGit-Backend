@@ -35,4 +35,9 @@ async function getRepoTree(token, fullName, branch) {
   return (tree.tree || []).map((entry) => entry.path);
 }
 
-module.exports = { githubFetch, listUserRepos, getRepoTree };
+async function listRepoBranches(token, fullName) {
+  const branches = await githubFetch(`/repos/${fullName}/branches?per_page=100`, token);
+  return branches.map((b) => ({ name: b.name, protected: b.protected, default: false }));
+}
+
+module.exports = { githubFetch, listUserRepos, getRepoTree, listRepoBranches };
