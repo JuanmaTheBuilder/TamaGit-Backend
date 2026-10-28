@@ -96,7 +96,7 @@ const tokenResponse = async (req, res) => {
       });
       const target = `${targetLink}?${query.toString()}`;
       if (/^https?:\/\//i.test(targetLink)) return res.redirect(target);
-      return res.type('html').send(appRedirectPage(target));
+      return res.type('html').send(appRedirectPage(target, req.headers['user-agent']));
     }
 
     return res.json({ token, user: safeUser(user) });
@@ -105,14 +105,31 @@ const tokenResponse = async (req, res) => {
   }
 };
 
-function appRedirectPage(target) {
-  const href = target.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const js = JSON.stringify(target).replace(/</g, '\\u003c');
+const EXPO_GO_PACKAGE = 'host.exp.exponent';
+
+function androidIntentUrl(target) {
+  const match = /^([a-z][a-z0-9+.-]*):\/\/(.*)$/i.exec(target);
+  if (!match) return target;
+  const [, scheme, rest] = match;
+  const isExpoGo = /^exps?$/i.test(scheme);
+  const pkg = isExpoGo ? EXPO_GO_PACKAGE : process.env.ANDROID_APP_PACKAGE || 'com.juanf24steam.tamagit';
+  return `intent://${rest}#Intent;scheme=${scheme};package=${pkg};end`;
+}
+
+function escapeHtml(value) {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function appRedirectPage(target, userAgent = '') {
+  const link = /android/i.test(userAgent) ? androidIntentUrl(target) : target;
+  const shown = escapeHtml(target.split('?')[0]);
+  const js = JSON.stringify(link).replace(/</g, '\\u003c');
   return `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Volver a Tamagit</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:48px 16px">
 <p>Sesión iniciada. Volviendo a Tamagit…</p>
-<p><a href="${href}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;border-radius:8px;text-decoration:none">Abrir Tamagit</a></p>
+<p><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;border-radius:8px;text-decoration:none">Abrir Tamagit</a></p>
+<p style="color:#888;font-size:12px">Destino: ${shown}</p>
 <script>window.location.href = ${js};</script></body></html>`;
 }
 
