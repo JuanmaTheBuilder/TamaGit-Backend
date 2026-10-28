@@ -14,5 +14,7 @@ router.post('/:id/hide', petController.hidePet);
 router.post('/:id/unhide', petController.unhidePet);
 router.post('/:petId/items', petController.addItem);
 router.delete('/:petId/items/:itemId', petController.removeItem);
+router.post('/:petId/items/:itemId/equip', petController.equipItem);
+router.post('/:petId/items/:itemId/unequip', petController.unequipItem);
 
 module.exports = router;

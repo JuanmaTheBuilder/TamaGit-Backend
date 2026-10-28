@@ -7,6 +7,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum Slot {
+  HEAD
+  BODY
+  LEGS
+}
+
+model Asset {
+  id        Int      @id @default(autoincrement())
+  name      String
+  kind      String   @default("glb")
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items Item[]
+  pets  Pet[]
+}
+
 model User {
   id                Int      @id @default(autoincrement())
   email             String?  @unique
@@ -79,21 +97,23 @@ model CommitAnalysis {
 }
 
 model Pet {
-  id         Int      @id @default(autoincrement())
-  name       String
-  species    String   @default("egg")
-  health     Int      @default(100)
-  hunger     Int      @default(100)
-  happiness  Int      @default(100)
-  lifeBranch String   @default("main")
-  imageUrl   String?
-  projectId  Int      @unique
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id           Int      @id @default(autoincrement())
+  name         String
+  species      String   @default("egg")
+  health       Int      @default(100)
+  hunger       Int      @default(100)
+  happiness    Int      @default(100)
+  lifeBranch   String   @default("main")
+  imageUrl     String?
+  projectId    Int      @unique
+  modelAssetId Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  items     PetItem[]
-  hiddenBy  PetHidden[]
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelAsset Asset?      @relation(fields: [modelAssetId], references: [id])
+  items      PetItem[]
+  hiddenBy   PetHidden[]
 }
 
 model PetItem {
@@ -101,6 +121,7 @@ model PetItem {
   petId     Int
   itemId    Int
   quantity  Int      @default(1)
+  equipped  Boolean  @default(false)
   createdAt DateTime @default(now())
 
   pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
@@ -139,10 +160,13 @@ model Item {
   imageUrl    String?
   price       Int      @default(0)
   category    String?
+  slot        Slot?
+  assetId     Int?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  pets PetItem[]
+  asset Asset?    @relation(fields: [assetId], references: [id])
+  pets  PetItem[]
 }
 
 model Food {

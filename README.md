@@ -50,6 +50,7 @@ Todas las variables viven en `.env` (ver `.env.example`):
 npm run dev          # desarrollo con auto-reload
 npm run db:migrate   # crear/aplicar migraciones (prisma migrate dev)
 npm run db:deploy    # aplicar migraciones en produccion (prisma migrate deploy)
+npm run db:seed      # carga assets y prendas de ejemplo para la demo
 npm run token        # genera un token JWT para un usuario (npm run token <username>)
 ```
 
@@ -81,6 +82,8 @@ En Vercel tambien debes definir las variables del apartado anterior
 | POST/GET | `/projects/:id/pet`   | JWT        | Crea/consulta la mascota del proyecto. |
 | GET/PATCH/DELETE | `/pets/:id` | JWT  | CRUD de mascota (crear desde el proyecto). |
 | POST/DELETE | `/pets/:petId/items(/:itemId)` | JWT (admin) | Inventario de items de la mascota. |
+| POST | `/pets/:petId/items/:itemId/equip` | JWT | Equipa una prenda (respetando un item por slot). |
+| POST | `/pets/:petId/items/:itemId/unequip` | JWT | Desequipa una prenda. |
 | GET | `/users` `/users/me` `/users/:id/pets` | Parcial | Usuarios y sus mascotas. |
 | GET/POST/PATCH/DELETE | `/items` | JWT (admin) | CRUD de items (catalogo). |
 | GET/POST/PATCH/DELETE | `/foods` | JWT (admin) | CRUD de comidas (catalogo). |
@@ -88,3 +91,56 @@ En Vercel tambien debes definir las variables del apartado anterior
 
 El usuario se identifica con el header `Authorization: Bearer <token>` (JWT devuelto
 por el callback de OAuth).
+
+## Cosméticos (assets, slots y equipar)
+
+El backend soporta prendas cosméticas para las mascotas mediante los siguientes conceptos:
+
+- **`Asset`**: recurso 3D (por ejemplo un archivo `.glb`) usado por las prendas o por el modelo base de la mascota.
+- **`Slot`**: enum de Prisma con los valores `HEAD`, `BODY` y `LEGS`. Cada prenda (`Item`) puede pertenecer a un slot; si no tiene slot, no es equipable.
+- **`PetItem.equipped`**: indica si una prenda del inventario de una mascota está puesta.
+- **`Pet.modelAssetId`**: asset del modelo 3D base de la mascota.
+- **`Item.assetId` + `Item.imageUrl`**: cada prenda puede tener un asset 3D y, como respaldo, una imagen 2D.
+
+### Regla de negocio en el servidor
+
+Solo se permite **una prenda equipada por slot** por mascota. Al equipar una prenda en un slot que ya tiene otra equipada, la anterior se desequipa automáticamente. El slot de la prenda y el slot objetivo deben coincidir; un item sin slot no es equipable.
+
+### Endpoints
+
+- `POST /pets/:petId/items/:itemId/equip` — equipa una prenda del inventario de la mascota. Body opcional `{ "slot": "HEAD" | "BODY" | "LEGS" }`: si se envía y no coincide con el slot de la prenda, responde 400.
+- `POST /pets/:petId/items/:itemId/unequip` — desequipa una prenda.
+
+Ambos endpoints requieren que el usuario sea el dueño de la mascota o un administrador.
+
+### Ejemplo de uso para la demo
+
+Obtén un token con:
+
+```bash
+npm run token <tu_usuario_de_github>
+```
+
+Luego, asumiendo que ya existe una mascota (`$PET_ID`) y que se han asignado items al inventario (puedes crearlos con `npm run db:seed`):
+
+```bash
+# 1. Equipar el primer sombrero (slot HEAD)
+curl -X POST https://tama-git-backend.vercel.app/pets/$PET_ID/items/$HAT_1_ID/equip \
+  -H "Authorization: Bearer $TOKEN"
+
+# 2. Equipar otro sombrero: el primero se desequipa automaticamente
+#    porque comparten el slot HEAD
+curl -X POST https://tama-git-backend.vercel.app/pets/$PET_ID/items/$HAT_2_ID/equip \
+  -H "Authorization: Bearer $TOKEN"
+
+# 2b. Slot incorrecto: el servidor responde 400 (un sombrero es HEAD, no BODY)
+curl -X POST https://tama-git-backend.vercel.app/pets/$PET_ID/items/$HAT_1_ID/equip \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"slot":"BODY"}'
+
+# 3. Ver el JSON de apariencia: especie, color y prendas equipadas
+curl https://tama-git-backend.vercel.app/pets/$PET_ID \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+La respuesta de `GET /pets/:id` incluye el array `items` con cada `PetItem`, su campo `equipped` y el `slot` del item, lo que permite construir el endpoint de apariencia.

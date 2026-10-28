@@ -11,6 +11,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
+    "db:seed": "node scripts/seedCosmetics.js",
     "token": "node scripts/devToken.js"
   },
   "keywords": [],

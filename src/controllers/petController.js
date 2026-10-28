@@ -303,4 +303,100 @@ const removeItem = async (req, res) => {
   }
 };
 
-module.exports = { getPet, updatePet, feedPet, hidePet, unhidePet, deletePet, addItem, removeItem };
+const equipItem = async (req, res) => {
+  const petId = Number(req.params.petId);
+  const itemId = Number(req.params.itemId);
+
+  try {
+    const pet = await prisma.pet.findUnique({
+      where: { id: petId },
+      include: { project: true },
+    });
+    if (!pet) return res.status(404).json({ error: 'Mascota no encontrada' });
+
+    const isOwner = pet.project.ownerId === req.user.id;
+    const isAdmin = req.user.isAdmin;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'No tienes permiso para equipar items en esta mascota' });
+    }
+
+    const petItem = await prisma.petItem.findUnique({
+      where: { petId_itemId: { petId, itemId } },
+      include: { item: true },
+    });
+    if (!petItem) return res.status(404).json({ error: 'La mascota no posee este item' });
+    if (!petItem.item.slot) return res.status(400).json({ error: 'Este item no es equipable' });
+
+    const { slot } = req.body || {};
+    if (slot !== undefined && slot !== petItem.item.slot) {
+      return res.status(400).json({
+        error: `El item es del slot ${petItem.item.slot}, no del slot ${slot}`,
+      });
+    }
+
+    const swap = () =>
+      prisma.$transaction(
+        async (tx) => {
+          await tx.petItem.updateMany({
+            where: { petId, item: { slot: petItem.item.slot }, equipped: true },
+            data: { equipped: false },
+          });
+          return tx.petItem.update({
+            where: { petId_itemId: { petId, itemId } },
+            data: { equipped: true },
+            include: { item: true },
+          });
+        },
+        { isolationLevel: 'Serializable' },
+      );
+
+    let equipped;
+    try {
+      equipped = await swap();
+    } catch (err) {
+      if (err.code !== 'P2034') throw err;
+      equipped = await swap();
+    }
+
+    res.json(equipped);
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo equipar el item', details: err.message });
+  }
+};
+
+const unequipItem = async (req, res) => {
+  const petId = Number(req.params.petId);
+  const itemId = Number(req.params.itemId);
+
+  try {
+    const pet = await prisma.pet.findUnique({
+      where: { id: petId },
+      include: { project: true },
+    });
+    if (!pet) return res.status(404).json({ error: 'Mascota no encontrada' });
+
+    const isOwner = pet.project.ownerId === req.user.id;
+    const isAdmin = req.user.isAdmin;
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'No tienes permiso para desequipar items en esta mascota' });
+    }
+
+    const petItem = await prisma.petItem.findUnique({
+      where: { petId_itemId: { petId, itemId } },
+      include: { item: true },
+    });
+    if (!petItem) return res.status(404).json({ error: 'La mascota no posee este item' });
+
+    const updated = await prisma.petItem.update({
+      where: { petId_itemId: { petId, itemId } },
+      data: { equipped: false },
+      include: { item: true },
+    });
+
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: 'No se pudo desequipar el item', details: err.message });
+  }
+};
+
+module.exports = { getPet, updatePet, feedPet, hidePet, unhidePet, deletePet, addItem, removeItem, equipItem, unequipItem };
