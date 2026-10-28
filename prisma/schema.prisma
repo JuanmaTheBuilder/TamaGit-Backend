@@ -26,58 +26,94 @@ model Asset {
 }
 
 model User {
-  id                Int             @id @default(autoincrement())
-  email             String?         @unique
+  id                Int      @id @default(autoincrement())
+  email             String?  @unique
   name              String?
-  avatarUrl         String?
-  createdAt         DateTime        @default(now())
-  githubAccessToken String?
-  githubId          Int?            @unique
+  githubId          Int?     @unique
   githubUsername    String?
-  updatedAt         DateTime        @updatedAt
-  isAdmin           Boolean         @default(false)
-  isBanned          Boolean         @default(false)
-  notifications     Notification[]
-  PetHidden         PetHidden[]
-  projects          Project[]
-  ProjectMember     ProjectMember[]
+  avatarUrl         String?
+  githubAccessToken String?
+  isAdmin           Boolean  @default(false)
+  isBanned          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  projects      Project[]
+  memberships   ProjectMember[]
+  hiddenPets    PetHidden[]
+  notifications Notification[]
 }
 
 model Project {
-  id             Int              @id @default(autoincrement())
-  githubRepoId   Int              @unique
-  name           String
-  fullName       String?
-  mainLanguage   String?
-  tools          String[]         @default([])
-  ownerId        Int
-  lastSyncedAt   DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  defaultBranch  String?
-  CommitAnalysis CommitAnalysis[]
-  pet            Pet?
-  owner          User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  ProjectMember  ProjectMember[]
+  id            Int       @id @default(autoincrement())
+  githubRepoId  Int       @unique
+  name          String
+  fullName      String?
+  defaultBranch String?
+  mainLanguage  String?
+  tools         String[]  @default([])
+  ownerId       Int
+  lastSyncedAt  DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members   ProjectMember[]
+  pet       Pet?
+  analyses  CommitAnalysis[]
+}
+
+model ProjectMember {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  role      String   @default("member")
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+model CommitAnalysis {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  sha       String
+  message   String
+  author    String?
+  date      DateTime?
+  commitUrl String?
+  branch    String?
+  score     Int      @default(0)
+  findings  Json     @default("[]")
+  summary   String?
+  fedAt     DateTime?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sha])
 }
 
 model Pet {
-  id           Int         @id @default(autoincrement())
+  id           Int      @id @default(autoincrement())
   name         String
-  species      String      @default("egg")
-  createdAt    DateTime    @default(now())
-  health       Int         @default(100)
-  hunger       Int         @default(100)
+  species      String   @default("egg")
+  health       Int      @default(100)
+  hunger       Int      @default(100)
+  happiness    Int      @default(100)
+  lifeBranch   String   @default("main")
   imageUrl     String?
-  projectId    Int         @unique
-  happiness    Int         @default(100)
-  lifeBranch   String      @default("main")
-  updatedAt    DateTime    @default(now())
+  projectId    Int      @unique
   modelAssetId Int?
-  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  modelAsset   Asset?      @relation(fields: [modelAssetId], references: [id])
-  PetHidden    PetHidden[]
-  items        PetItem[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  modelAsset Asset?      @relation(fields: [modelAssetId], references: [id])
+  items      PetItem[]
+  hiddenBy   PetHidden[]
 }
 
 model PetItem {
@@ -87,10 +123,23 @@ model PetItem {
   quantity  Int      @default(1)
   equipped  Boolean  @default(false)
   createdAt DateTime @default(now())
-  item      Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  pet       Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
+  item Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
   @@unique([petId, itemId])
+}
+
+model PetHidden {
+  id        Int      @id @default(autoincrement())
+  petId     Int
+  userId    Int
+  createdAt DateTime @default(now())
+
+  pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([petId, userId])
 }
 
 model Notification {
@@ -100,22 +149,24 @@ model Notification {
   message   String
   createdAt DateTime  @default(now())
   readAt    DateTime?
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Item {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   name        String
   description String?
   imageUrl    String?
-  price       Int       @default(0)
+  price       Int      @default(0)
   category    String?
   slot        Slot?
   assetId     Int?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  asset       Asset?    @relation(fields: [assetId], references: [id])
-  pets        PetItem[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  asset Asset?    @relation(fields: [assetId], references: [id])
+  pets  PetItem[]
 }
 
 model Food {
@@ -123,51 +174,9 @@ model Food {
   name          String
   description   String?
   imageUrl      String?
+  size          String   @default("medium")
   hungerRestore Int      @default(30)
   price         Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  size          String   @default("medium")
-}
-
-model CommitAnalysis {
-  id        Int       @id @default(autoincrement())
-  projectId Int
-  sha       String
-  message   String
-  author    String?
-  date      DateTime?
-  commitUrl String?
-  branch    String?
-  score     Int       @default(0)
-  findings  Json      @default("[]")
-  summary   String?
-  createdAt DateTime  @default(now())
-  fedAt     DateTime?
-  Project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, sha])
-}
-
-model PetHidden {
-  id        Int      @id @default(autoincrement())
-  petId     Int
-  userId    Int
-  createdAt DateTime @default(now())
-  Pet       Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([petId, userId])
-}
-
-model ProjectMember {
-  id        Int      @id @default(autoincrement())
-  projectId Int
-  userId    Int
-  role      String   @default("member")
-  createdAt DateTime @default(now())
-  Project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, userId])
 }

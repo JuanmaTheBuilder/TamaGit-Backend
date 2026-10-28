@@ -12,11 +12,13 @@ const getById = async (req, res) => {
 };
 
 const create = async (req, res) => {
-  const { name, description, imageUrl, hungerRestore, price } = req.body;
+  const { name, description, imageUrl, size, hungerRestore, price } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Falta el nombre de la comida' });
   }
+
+  const validSizes = ['small', 'medium', 'large'];
 
   try {
     const food = await prisma.food.create({
@@ -24,6 +26,7 @@ const create = async (req, res) => {
         name: name.trim(),
         description: description ?? null,
         imageUrl: imageUrl ?? null,
+        size: validSizes.includes(size) ? size : 'medium',
         hungerRestore: Number.isFinite(Number(hungerRestore)) ? Number(hungerRestore) : 30,
         price: Number.isFinite(Number(price)) ? Number(price) : 0,
       },
@@ -36,7 +39,9 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   const foodId = Number(req.params.id);
-  const { name, description, imageUrl, hungerRestore, price } = req.body;
+  const { name, description, imageUrl, size, hungerRestore, price } = req.body;
+
+  const validSizes = ['small', 'medium', 'large'];
 
   try {
     const food = await prisma.food.findUnique({ where: { id: foodId } });
@@ -48,6 +53,7 @@ const update = async (req, res) => {
         name: name !== undefined ? name : undefined,
         description: description !== undefined ? description : undefined,
         imageUrl: imageUrl !== undefined ? imageUrl : undefined,
+        size: size !== undefined ? (validSizes.includes(size) ? size : 'medium') : undefined,
         hungerRestore: hungerRestore !== undefined ? Number(hungerRestore) : undefined,
         price: price !== undefined ? Number(price) : undefined,
       },
