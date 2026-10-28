@@ -42,29 +42,34 @@ const itemsData = [
 
 (async () => {
   try {
-    const createdAssets = await Promise.all(
-      assets.map((asset) => prisma.asset.create({ data: asset })),
-    );
+    const createdAssets = [];
+    for (const asset of assets) {
+      const existing = await prisma.asset.findFirst({ where: { name: asset.name } });
+      createdAssets.push(existing || (await prisma.asset.create({ data: asset })));
+    }
 
     const assetIdBySlot = {};
     createdAssets.forEach((asset, index) => {
       assetIdBySlot[SLOTS[index]] = asset.id;
     });
 
-    const items = await Promise.all(
-      itemsData.map((item) =>
-        prisma.item.create({
-          data: {
-            name: item.name,
-            description: item.description,
-            imageUrl: item.imageUrl,
-            price: item.price,
-            slot: item.slot,
-            assetId: assetIdBySlot[item.slot],
-          },
-        }),
-      ),
-    );
+    const items = [];
+    for (const item of itemsData) {
+      const existing = await prisma.item.findFirst({ where: { name: item.name } });
+      items.push(
+        existing ||
+          (await prisma.item.create({
+            data: {
+              name: item.name,
+              description: item.description,
+              imageUrl: item.imageUrl,
+              price: item.price,
+              slot: item.slot,
+              assetId: assetIdBySlot[item.slot],
+            },
+          })),
+      );
+    }
 
     console.log(
       'Assets creados:',

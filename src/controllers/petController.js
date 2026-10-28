@@ -327,21 +327,36 @@ const equipItem = async (req, res) => {
     if (!petItem) return res.status(404).json({ error: 'La mascota no posee este item' });
     if (!petItem.item.slot) return res.status(400).json({ error: 'Este item no es equipable' });
 
-    const [, equipped] = await prisma.$transaction([
-      prisma.petItem.updateMany({
-        where: {
-          petId,
-          item: { slot: petItem.item.slot },
-          equipped: true,
+    const { slot } = req.body || {};
+    if (slot !== undefined && slot !== petItem.item.slot) {
+      return res.status(400).json({
+        error: `El item es del slot ${petItem.item.slot}, no del slot ${slot}`,
+      });
+    }
+
+    const swap = () =>
+      prisma.$transaction(
+        async (tx) => {
+          await tx.petItem.updateMany({
+            where: { petId, item: { slot: petItem.item.slot }, equipped: true },
+            data: { equipped: false },
+          });
+          return tx.petItem.update({
+            where: { petId_itemId: { petId, itemId } },
+            data: { equipped: true },
+            include: { item: true },
+          });
         },
-        data: { equipped: false },
-      }),
-      prisma.petItem.update({
-        where: { petId_itemId: { petId, itemId } },
-        data: { equipped: true },
-        include: { item: true },
-      }),
-    ]);
+        { isolationLevel: 'Serializable' },
+      );
+
+    let equipped;
+    try {
+      equipped = await swap();
+    } catch (err) {
+      if (err.code !== 'P2034') throw err;
+      equipped = await swap();
+    }
 
     res.json(equipped);
   } catch (err) {

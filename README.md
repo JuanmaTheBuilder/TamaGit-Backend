@@ -108,7 +108,7 @@ Solo se permite **una prenda equipada por slot** por mascota. Al equipar una pre
 
 ### Endpoints
 
-- `POST /pets/:petId/items/:itemId/equip` — equipa una prenda del inventario de la mascota.
+- `POST /pets/:petId/items/:itemId/equip` — equipa una prenda del inventario de la mascota. Body opcional `{ "slot": "HEAD" | "BODY" | "LEGS" }`: si se envía y no coincide con el slot de la prenda, responde 400.
 - `POST /pets/:petId/items/:itemId/unequip` — desequipa una prenda.
 
 Ambos endpoints requieren que el usuario sea el dueño de la mascota o un administrador.
@@ -132,6 +132,11 @@ curl -X POST https://tama-git-backend.vercel.app/pets/$PET_ID/items/$HAT_1_ID/eq
 #    porque comparten el slot HEAD
 curl -X POST https://tama-git-backend.vercel.app/pets/$PET_ID/items/$HAT_2_ID/equip \
   -H "Authorization: Bearer $TOKEN"
+
+# 2b. Slot incorrecto: el servidor responde 400 (un sombrero es HEAD, no BODY)
+curl -X POST https://tama-git-backend.vercel.app/pets/$PET_ID/items/$HAT_1_ID/equip \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"slot":"BODY"}'
 
 # 3. Ver el JSON de apariencia: especie, color y prendas equipadas
 curl https://tama-git-backend.vercel.app/pets/$PET_ID \
