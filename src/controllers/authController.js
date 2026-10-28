@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const jwt = require('jsonwebtoken');
 const { githubAuthorizeUrl, randomState, resolveCallbackUrl } = require('../lib/github');
+const { appRedirectPage, usedCodePage, isAppLink } = require('../lib/authPages');
 
 const login = (req, res) => {
   const redirectUri = typeof req.query.redirect_uri === 'string' ? req.query.redirect_uri.trim() : '';
@@ -44,6 +45,9 @@ const tokenResponse = async (req, res) => {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
+      if (tokenData.error === 'bad_verification_code') {
+        return res.status(400).type('html').send(usedCodePage());
+      }
       return res.status(401).json({ error: 'No se pudo obtener el token de GitHub', details: tokenData });
     }
 
@@ -94,13 +98,22 @@ const tokenResponse = async (req, res) => {
         username: user.githubUsername || '',
         avatar: user.avatarUrl || '',
       });
-      return res.redirect(`${targetLink}?${query.toString()}`);
+      const target = `${targetLink}?${query.toString()}`;
+      if (!isAppLink(targetLink)) return res.redirect(target);
+      return res.redirect(`/auth/github/return?${new URLSearchParams({ link: target })}`);
     }
 
     return res.json({ token, user: safeUser(user) });
   } catch (err) {
     return res.status(500).json({ error: 'Error en el callback de OAuth', details: err.message });
   }
+};
+
+const returnToApp = (req, res) => {
+  const link = typeof req.query.link === 'string' ? req.query.link : '';
+  if (!isAppLink(link)) return res.status(400).json({ error: 'Enlace de retorno inválido' });
+  res.setHeader('Cache-Control', 'no-store');
+  return res.type('html').send(appRedirectPage(link, req.headers['user-agent']));
 };
 
 function safeUser(user) {
@@ -117,4 +130,4 @@ function safeUser(user) {
   };
 }
 
-module.exports = { login, tokenResponse, safeUser };
+module.exports = { login, tokenResponse, returnToApp, safeUser };
