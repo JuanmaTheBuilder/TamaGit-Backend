@@ -94,9 +94,7 @@ const tokenResponse = async (req, res) => {
         username: user.githubUsername || '',
         avatar: user.avatarUrl || '',
       });
-      const target = `${targetLink}?${query.toString()}`;
-      if (/^https?:\/\//i.test(targetLink)) return res.redirect(target);
-      return res.type('html').send(appRedirectPage(target));
+      return res.redirect(`${targetLink}?${query.toString()}`);
     }
 
     return res.json({ token, user: safeUser(user) });
@@ -104,17 +102,6 @@ const tokenResponse = async (req, res) => {
     return res.status(500).json({ error: 'Error en el callback de OAuth', details: err.message });
   }
 };
-
-function appRedirectPage(target) {
-  const href = target.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-  const js = JSON.stringify(target).replace(/</g, '\\u003c');
-  return `<!doctype html><html lang="es"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Volver a Tamagit</title></head>
-<body style="font-family:sans-serif;text-align:center;padding:48px 16px">
-<p>Sesión iniciada. Volviendo a Tamagit…</p>
-<p><a href="${href}" style="display:inline-block;padding:12px 20px;background:#111;color:#fff;border-radius:8px;text-decoration:none">Abrir Tamagit</a></p>
-<script>window.location.href = ${js};</script></body></html>`;
-}
 
 function safeUser(user) {
   return {
