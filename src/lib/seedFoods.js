@@ -27,8 +27,6 @@ const TIERS = {
   },
 };
 
-const size = (tier) => tier;
-
 async function seedFoodsIfEmpty() {
   const count = await prisma.food.count();
   if (count > 0) return count;

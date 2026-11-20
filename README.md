@@ -43,6 +43,7 @@ Todas las variables viven en `.env` (ver `.env.example`):
 | `TAMAGIT_DEEP_LINK`     | No        | Deep link de la app (`tamagit://auth`) para redirigir tras el login. |
 | `JWT_EXPIRES`           | No        | Expiracion del token (default: `30d`). |
 | `PORT`                  | No        | Puerto local (default: `3000`). |
+| `EXPO_ACCESS_TOKEN`     | No        | Access token de Expo; solo si activas "Enhanced Security for Push Notifications" en tu proyecto Expo. Si no existe, el push se envía sin header `Authorization`. |
 
 ## Scripts utiles
 
@@ -52,6 +53,9 @@ npm run db:migrate   # crear/aplicar migraciones (prisma migrate dev)
 npm run db:deploy    # aplicar migraciones en produccion (prisma migrate deploy)
 npm run db:seed      # carga assets y prendas de ejemplo para la demo
 npm run token        # genera un token JWT para un usuario (npm run token <username>)
+npm test             # pruebas (node:test, sin base ni red: usan dobles en memoria)
+npm run lint         # ESLint
+npm run typecheck    # tsc sobre los archivos con // @ts-check
 ```
 
 ## Despliegue en Vercel
@@ -78,6 +82,7 @@ En Vercel tambien debes definir las variables del apartado anterior
 | ------ | ----------------------- | --------- | --- |
 | GET    | `/auth/github/login`    | No        | Inicia OAuth con GitHub. |
 | GET    | `/auth/github/callback` | No        | Callback de OAuth; devuelve `token` + `user`. |
+| PUT    | `/auth/push-token`      | JWT       | Registra (o borra con `null`) el ExpoPushToken del usuario. |
 | GET/POST | `/projects` `/projects/sync` | JWT | Lista/sincroniza repos como proyectos. |
 | POST/GET | `/projects/:id/pet`   | JWT        | Crea/consulta la mascota del proyecto. |
 | GET/PATCH/DELETE | `/pets/:id` | JWT  | CRUD de mascota (crear desde el proyecto). |
@@ -144,3 +149,62 @@ curl https://tama-git-backend.vercel.app/pets/$PET_ID \
 ```
 
 La respuesta de `GET /pets/:id` incluye el array `items` con cada `PetItem`, su campo `equipped` y el `slot` del item, lo que permite construir el endpoint de apariencia.
+
+## Notificaciones push (Expo)
+
+Cada vez que el backend crea una `Notification` (lo que la app muestra en `GET /notifications`),
+también envía un aviso push por [Expo Push](https://docs.expo.dev/push-notifications/sending-notifications/)
+al usuario, si tiene un `pushToken` registrado. La app no envía notificaciones: solo registra su
+token y reacciona cuando el usuario toca el aviso.
+
+- **Registro:** `PUT /auth/push-token` con body `{ "token": "ExponentPushToken[...]" }` o
+  `{ "token": null }` para dejar de recibir avisos. El usuario sale siempre del JWT. Responde
+  `200 { "ok": true }`, o `400 { "error": "..." }` si el formato no cumple
+  `/^Expo(nent)?PushToken\[.+\]$/`. Un token pertenece a un solo usuario: si otro lo tenía,
+  se le quita.
+- **Contenido del aviso:** `title` según el `type`, `body` = `message` y `data` =
+  `{ notificationId, type, projectId? }` (todos string). `projectId` permite navegar a `/project/[id]`.
+- **Envío:** se hace `await` antes de responder la petición (requisito de Vercel/serverless). Si
+  Expo falla, se registra con `console.error` y la operación principal sigue. Si Expo responde
+  `DeviceNotRegistered`, el `pushToken` del usuario pasa a `null`.
+- `GET /users/me` incluye `hasPushToken` (boolean); el token nunca se expone ni se loguea completo.
+- Requiere la migración `20261119000000_user_push_token`: **redesplegar** para aplicarla.
+
+### Probarlo con curl (token falso)
+
+```bash
+API=https://tama-git-backend.vercel.app
+TOKEN=<jwt de un usuario>          # npm run token <username>
+ADMIN=<jwt de un administrador>
+USER_ID=<id de ese usuario>
+
+# 1. Registrar un token falso -> 200 {"ok":true}
+curl -X PUT $API/auth/push-token \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"token":"ExponentPushToken[falso]"}'
+
+curl $API/users/me -H "Authorization: Bearer $TOKEN"   # "hasPushToken": true
+
+# 2. Formato inválido -> 400 {"error":"..."}
+curl -X PUT $API/auth/push-token \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"token":"hola"}'
+
+# 3. Disparar una Notification (un admin banea con motivo) -> se envía el push
+curl -X PATCH $API/users/$USER_ID/ban \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"isBanned":true,"reason":"prueba de push"}'
+
+# 4. Expo respondió DeviceNotRegistered y el token quedó en null: prueba que el aviso sí salió.
+#    (Como el usuario quedó baneado, revísalo en `npm run db:studio` -> User.pushToken = null,
+#    o desbanea y consulta /users/me -> "hasPushToken": false)
+curl -X PATCH $API/users/$USER_ID/ban \
+  -H "Authorization: Bearer $ADMIN" -H "Content-Type: application/json" \
+  -d '{"isBanned":false}'
+curl $API/users/me -H "Authorization: Bearer $TOKEN"   # "hasPushToken": false
+
+# 5. Borrar el token manualmente
+curl -X PUT $API/auth/push-token \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"token":null}'
+```

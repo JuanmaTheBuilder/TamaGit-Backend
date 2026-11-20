@@ -33,6 +33,7 @@ model User {
   githubUsername    String?
   avatarUrl         String?
   githubAccessToken String?
+  pushToken         String?  @unique
   isAdmin           Boolean  @default(false)
   isBanned          Boolean  @default(false)
   createdAt         DateTime @default(now())

@@ -205,11 +205,12 @@ const deletePet = async (req, res) => {
     });
 
     if (owner && owner.id !== req.user.id && reason && reason.trim()) {
-      await createNotification(
-        owner.id,
-        'pet_deleted',
-        `Tu mascota "${pet.name}" del proyecto "${pet.project.name}" fue eliminada por un administrador. Motivo: ${reason.trim()}`
-      );
+      await createNotification(req.app.locals, {
+        userId: owner.id,
+        type: 'pet_deleted',
+        message: `Tu mascota "${pet.name}" del proyecto "${pet.project.name}" fue eliminada por un administrador. Motivo: ${reason.trim()}`,
+        projectId: pet.projectId,
+      });
     }
 
     await prisma.pet.delete({ where: { id: petId } });
@@ -289,11 +290,12 @@ const removeItem = async (req, res) => {
     });
 
     if (owner && owner.id !== req.user.id && reason && reason.trim()) {
-      await createNotification(
-        owner.id,
-        'item_removed',
-        `Se te quitó el item "${petItem.item.name}" de tu mascota "${pet.name}" (proyecto: ${pet.project.name}). Motivo: ${reason.trim()}`
-      );
+      await createNotification(req.app.locals, {
+        userId: owner.id,
+        type: 'item_removed',
+        message: `Se te quitó el item "${petItem.item.name}" de tu mascota "${pet.name}" (proyecto: ${pet.project.name}). Motivo: ${reason.trim()}`,
+        projectId: pet.projectId,
+      });
     }
 
     await prisma.petItem.delete({ where: { id: petItem.id } });

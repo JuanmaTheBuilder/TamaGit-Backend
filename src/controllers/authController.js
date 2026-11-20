@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const jwt = require('jsonwebtoken');
 const { githubAuthorizeUrl, randomState, resolveCallbackUrl } = require('../lib/github');
+const { esPushTokenValido, guardarPushToken } = require('../lib/pushTokens');
 
 const login = (req, res) => {
   const redirectUri = typeof req.query.redirect_uri === 'string' ? req.query.redirect_uri.trim() : '';
@@ -103,6 +104,25 @@ const tokenResponse = async (req, res) => {
   }
 };
 
+/**
+ * PUT /auth/push-token — registra (o borra con null) el ExpoPushToken del
+ * usuario autenticado. El userId sale siempre del JWT (req.user), nunca del body.
+ */
+const setPushToken = async (req, res) => {
+  const body = req.body ?? {};
+  if (!Object.prototype.hasOwnProperty.call(body, 'token') || !esPushTokenValido(body.token)) {
+    return res.status(400).json({ error: 'token debe ser null o un ExpoPushToken válido' });
+  }
+
+  try {
+    const db = req.app.locals.prisma ?? prisma;
+    await guardarPushToken(db, req.user.id, body.token);
+    return res.status(200).json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'No se pudo guardar el push token', details: err.message });
+  }
+};
+
 function safeUser(user) {
   return {
     id: user.id,
@@ -113,8 +133,9 @@ function safeUser(user) {
     avatarUrl: user.avatarUrl,
     isAdmin: user.isAdmin,
     isBanned: user.isBanned,
+    hasPushToken: Boolean(user.pushToken),
     createdAt: user.createdAt,
   };
 }
 
-module.exports = { login, tokenResponse, safeUser };
+module.exports = { login, tokenResponse, setPushToken, safeUser };
