@@ -57,10 +57,10 @@ model Project {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  owner     User            @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  members   ProjectMember[]
-  pet       Pet?
-  analyses  CommitAnalysis[]
+  owner    User             @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  members  ProjectMember[]
+  pet      Pet?
+  analyses CommitAnalysis[]
 }
 
 model ProjectMember {
@@ -77,7 +77,7 @@ model ProjectMember {
 }
 
 model CommitAnalysis {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   projectId Int
   sha       String
   message   String
@@ -85,11 +85,11 @@ model CommitAnalysis {
   date      DateTime?
   commitUrl String?
   branch    String?
-  score     Int      @default(0)
-  findings  Json     @default("[]")
+  score     Int       @default(0)
+  findings  Json      @default("[]")
   summary   String?
   fedAt     DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -97,18 +97,22 @@ model CommitAnalysis {
 }
 
 model Pet {
-  id           Int      @id @default(autoincrement())
-  name         String
-  species      String   @default("egg")
-  health       Int      @default(100)
-  hunger       Int      @default(100)
-  happiness    Int      @default(100)
-  lifeBranch   String   @default("main")
-  imageUrl     String?
-  projectId    Int      @unique
-  modelAssetId Int?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             Int      @id @default(autoincrement())
+  name           String
+  species        String   @default("egg")
+  health         Int      @default(100)
+  hunger         Int      @default(100)
+  happiness      Int      @default(100)
+  lifeBranch     String   @default("main")
+  imageUrl       String?
+  bodyColor      String?
+  healthColor    String?
+  hungerColor    String?
+  happinessColor String?
+  projectId      Int      @unique
+  modelAssetId   Int?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   modelAsset Asset?      @relation(fields: [modelAssetId], references: [id])

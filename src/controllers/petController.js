@@ -4,6 +4,9 @@ const { memberOf, isPetHiddenBy } = require('../lib/membership');
 const { withLiveStats } = require('../lib/petStats');
 const { tierFromScore, healFromTier } = require('../lib/commitAnalysis');
 
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const COLOR_FIELDS = ['bodyColor', 'healthColor', 'hungerColor', 'happinessColor'];
+
 async function canAccess(pet, user, { allowHidden = false } = {}) {
   if (user.isAdmin) return true;
   if (pet.project.ownerId === user.id) return true;
@@ -54,6 +57,13 @@ const updatePet = async (req, res) => {
     }
 
     const { name, health, hunger, happiness, imageUrl } = req.body;
+    const colors = Object.fromEntries(COLOR_FIELDS.map((field) => [field, req.body[field]]));
+
+    for (const [field, value] of Object.entries(colors)) {
+      if (value !== undefined && value !== null && (typeof value !== 'string' || !HEX_COLOR.test(value))) {
+        return res.status(400).json({ error: `Color inválido en ${field}` });
+      }
+    }
 
     const updated = await prisma.pet.update({
       where: { id: petId },
@@ -63,6 +73,10 @@ const updatePet = async (req, res) => {
         hunger: hunger !== undefined ? hunger : undefined,
         happiness: happiness !== undefined ? happiness : undefined,
         imageUrl: imageUrl !== undefined ? imageUrl : undefined,
+        bodyColor: colors.bodyColor,
+        healthColor: colors.healthColor,
+        hungerColor: colors.hungerColor,
+        happinessColor: colors.happinessColor,
       },
     });
 
