@@ -1,5 +1,6 @@
 -- AlterTable
-ALTER TABLE "Pet" ADD COLUMN     "bodyColor" TEXT,
-ADD COLUMN     "healthColor" TEXT,
-ADD COLUMN     "hungerColor" TEXT,
-ADD COLUMN     "happinessColor" TEXT;
+ALTER TABLE "Pet"
+  ADD COLUMN IF NOT EXISTS "bodyColor" TEXT,
+  ADD COLUMN IF NOT EXISTS "healthColor" TEXT,
+  ADD COLUMN IF NOT EXISTS "hungerColor" TEXT,
+  ADD COLUMN IF NOT EXISTS "happinessColor" TEXT;
