@@ -1,4 +1,6 @@
+// @ts-check
 const prisma = require('../lib/prisma');
+const { tituloPara } = require('../lib/notificador/titulos');
 
 const list = async (req, res) => {
   try {
@@ -32,12 +34,34 @@ const markRead = async (req, res) => {
   }
 };
 
-const createNotification = async (userId, type, message) => {
+/**
+ * Crea una Notification y, a continuación, envía el aviso push.
+ * Se hace `await` al envío para que termine antes de responder (Vercel/serverless).
+ * Nunca lanza: las notificaciones no son críticas.
+ * @param {{ prisma?: any, notificador?: import('../lib/notificador/expoPush').Notificador }} deps
+ * @param {{ userId: number, type: string, message: string, projectId?: number | null }} datos
+ */
+const createNotification = async (deps, { userId, type, message, projectId = null }) => {
+  const db = deps?.prisma ?? prisma;
+  let notification;
   try {
-    await prisma.notification.create({ data: { userId, type, message } });
+    notification = await db.notification.create({ data: { userId, type, message } });
   } catch {
     // silently fail – notifications are non-critical
+    return;
   }
+
+  if (!deps?.notificador) return;
+  /** @type {Record<string, string>} */
+  const datos = { notificationId: String(notification.id), type };
+  if (projectId != null) datos.projectId = String(projectId);
+
+  try {
+    await deps.notificador.avisar(userId, { titulo: tituloPara(type), cuerpo: message, datos });
+  } catch (err) {
+    console.error('[push] El notificador falló:', err?.message ?? err);
+  }
+  return notification;
 };
 
 module.exports = { list, markRead, createNotification };

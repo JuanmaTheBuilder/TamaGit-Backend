@@ -11,7 +11,8 @@ const verifyToken = async (req, res, next) => {
 
   try {
     const payload = jwt.verify(authToken, process.env.JWT_SECRET);
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
+    const db = req.app?.locals?.prisma ?? prisma;
+    const user = await db.user.findUnique({ where: { id: payload.sub } });
 
     if (!user) {
       return res.status(401).json({ error: 'No autorizado: usuario inexistente' });

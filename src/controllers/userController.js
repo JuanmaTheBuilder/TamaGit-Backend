@@ -73,7 +73,11 @@ const setBan = async (req, res) => {
 
     if (isBanned && reason && reason.trim()) {
       const { createNotification } = require('./notificationController');
-      await createNotification(targetId, 'banned', `Tu cuenta ha sido suspendida. Motivo: ${reason.trim()}`);
+      await createNotification(req.app.locals, {
+        userId: targetId,
+        type: 'banned',
+        message: `Tu cuenta ha sido suspendida. Motivo: ${reason.trim()}`,
+      });
     }
 
     res.json(safeUser(user));
@@ -144,6 +148,7 @@ function safeUser(user) {
     avatarUrl: user.avatarUrl,
     isAdmin: user.isAdmin,
     isBanned: user.isBanned,
+    hasPushToken: Boolean(user.pushToken),
     createdAt: user.createdAt,
   };
 }
