@@ -1,6 +1,6 @@
 require('dotenv').config();
 const prisma = require('./lib/prisma');
-const { createApp } = require('./app');
+const { createApp } = require('./crearApp');
 const { crearNotificadorExpo } = require('./lib/notificador/expoPush');
 const { seedFoodsIfEmpty } = require('./lib/seedFoods');
 
@@ -15,3 +15,5 @@ app.listen(port, () => {
     .then((n) => console.log(`Seed de comidas: ${n} platillos disponibles`))
     .catch((e) => console.warn('No se pudo sembrar comidas:', e.message));
 });
+
+module.exports = app;

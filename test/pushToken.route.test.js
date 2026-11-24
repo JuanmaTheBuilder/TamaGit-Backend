@@ -2,7 +2,7 @@
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const jwt = require('jsonwebtoken');
-const { createApp } = require('../src/app');
+const { createApp } = require('../src/crearApp');
 const { NotificadorEnMemoria } = require('./dobles/notificadorEnMemoria');
 const { crearPrismaEnMemoria } = require('./dobles/prismaEnMemoria');
 
